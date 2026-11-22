@@ -22,7 +22,7 @@ export function crearFirebaseFalso() {
   const ubicaciones = new Set<string>();
   const auditoria: EntradaAuditoria[] = [];
   /** Permite simular que el batch (`ambulancias` + `roles`) falla. */
-  const fallos = { crearDocumentos: false };
+  const fallos = { crearDocumentos: false, auditoria: false };
   const tokens: Record<string, string> = { 'tok-admin': 'admin-1', 'tok-usuario': 'user-1' };
   let siguiente = 0;
 
@@ -98,6 +98,7 @@ export function crearFirebaseFalso() {
         ubicaciones.delete(id);
       },
       async auditar(e) {
+        if (fallos.auditoria) throw new Error('fallo simulado de auditoría');
         auditoria.push(e);
       },
     },

@@ -1,7 +1,7 @@
 import cors from '@fastify/cors';
 import Fastify, { type FastifyInstance, type FastifyServerOptions } from 'fastify';
 import type { FirebasePorts } from './domain/puertos.js';
-import { modulos } from './modules/index.js';
+import { crearModulos } from './modules/index.js';
 import { registrarAuth } from './plugins/auth.js';
 import { registrarErrores } from './plugins/errors.js';
 
@@ -23,8 +23,6 @@ export async function buildApp(opts: OpcionesApp): Promise<FastifyInstance> {
   });
   registrarAuth(app, { tokens: opts.firebase.tokens, roles: opts.firebase.roles });
 
-  for (const modulo of modulos) {
-    await app.register(modulo, { firebase: opts.firebase });
-  }
+  for (const modulo of crearModulos(opts.firebase, app.log)) await app.register(modulo);
   return app;
 }

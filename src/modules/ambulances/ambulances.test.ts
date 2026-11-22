@@ -65,6 +65,15 @@ describe('POST /ambulancias', () => {
     expect(falso.usuarios.size).toBe(0);
     expect(falso.ambulancias.size).toBe(0);
   });
+
+  it('si falla la auditoría conserva el resultado exitoso de la acción', async () => {
+    falso.fallos.auditoria = true;
+    const res = await post(BASE, nueva);
+
+    expect(res.statusCode).toBe(201);
+    expect(falso.ambulancias.size).toBe(1);
+    expect(falso.auditoria).toEqual([]);
+  });
 });
 
 describe('POST /ambulancias/lote', () => {
