@@ -1,8 +1,13 @@
 import type { AccionAuditoria, AmbulanciasStore } from '../../domain/puertos.js';
-import type { Log, OperacionesAmbulancias, ServicioAmbulancias } from './ambulances.service.js';
+import type { Log, ServicioAmbulancias } from './ambulances.service.js';
+
+/**
+ * Decorator: envuelve un `ServicioAmbulancias` y devuelve otro con la misma interfaz, que además
+ * registra la auditoría después de cada acción exitosa. Un fallo al auditar solo se avisa en el log.
+ */
 
 export function decorarConAuditoria(
-  servicio: OperacionesAmbulancias,
+  servicio: ServicioAmbulancias,
   auditoria: Pick<AmbulanciasStore, 'auditar'>,
   log: Log,
 ): ServicioAmbulancias {
@@ -16,13 +21,13 @@ export function decorarConAuditoria(
 
   return {
     async crear(adminUid, d) {
-      const resultado = await servicio.crear(d);
+      const resultado = await servicio.crear(adminUid, d);
       await registrar(adminUid, 'crear', resultado.id);
       return resultado;
     },
 
     async crearLote(adminUid, d) {
-      const resultado = await servicio.crearLote(d);
+      const resultado = await servicio.crearLote(adminUid, d);
       for (const fila of resultado.resultados) {
         if (fila.ok && fila.id) await registrar(adminUid, 'crear', fila.id);
       }
@@ -30,27 +35,27 @@ export function decorarConAuditoria(
     },
 
     async editar(adminUid, id, campos) {
-      await servicio.editar(id, campos);
+      await servicio.editar(adminUid, id, campos);
       await registrar(adminUid, 'editar', id);
     },
 
     async deshabilitar(adminUid, id) {
-      await servicio.deshabilitar(id);
+      await servicio.deshabilitar(adminUid, id);
       await registrar(adminUid, 'deshabilitar', id);
     },
 
     async habilitar(adminUid, id) {
-      await servicio.habilitar(id);
+      await servicio.habilitar(adminUid, id);
       await registrar(adminUid, 'habilitar', id);
     },
 
     async resetearPassword(adminUid, id, password) {
-      await servicio.resetearPassword(id, password);
+      await servicio.resetearPassword(adminUid, id, password);
       await registrar(adminUid, 'resetear_password', id);
     },
 
     async cerrarTurno(adminUid, id) {
-      await servicio.cerrarTurno(id);
+      await servicio.cerrarTurno(adminUid, id);
       await registrar(adminUid, 'cerrar_turno', id);
     },
   };

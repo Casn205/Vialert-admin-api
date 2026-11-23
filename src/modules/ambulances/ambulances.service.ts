@@ -15,16 +15,10 @@ interface Deps {
   ahora?: () => Date;
 }
 
-export interface OperacionesAmbulancias {
-  crear(d: CrearAmbulanciaDto): Promise<AmbulanciaDto>;
-  crearLote(d: LoteDto): Promise<{ resultados: ResultadoFila[] }>;
-  editar(id: string, campos: EditarAmbulanciaDto): Promise<void>;
-  deshabilitar(id: string): Promise<void>;
-  habilitar(id: string): Promise<void>;
-  resetearPassword(id: string, password: string): Promise<void>;
-  cerrarTurno(id: string): Promise<void>;
-}
-
+/**
+ * Contrato del módulo. Lo implementan el servicio base y su decorador de auditoría (misma interfaz),
+ * así que se pueden apilar sin que las rutas noten la diferencia. `adminUid` es quien ejecuta la acción.
+ */
 export interface ServicioAmbulancias {
   crear(adminUid: string, d: CrearAmbulanciaDto): Promise<AmbulanciaDto>;
   crearLote(adminUid: string, d: LoteDto): Promise<{ resultados: ResultadoFila[] }>;
@@ -35,7 +29,7 @@ export interface ServicioAmbulancias {
   cerrarTurno(adminUid: string, id: string): Promise<void>;
 }
 
-export function crearServicioAmbulancias({ cuentas, store, log, ahora = () => new Date() }: Deps): OperacionesAmbulancias {
+export function crearServicioAmbulancias({ cuentas, store, log, ahora = () => new Date() }: Deps): ServicioAmbulancias {
   async function requerir(id: string): Promise<Ambulancia> {
     const doc = await store.obtener(id);
     if (!doc) throw new AppError(404, 'NOT_FOUND', 'La ambulancia no existe.');
@@ -75,10 +69,10 @@ export function crearServicioAmbulancias({ cuentas, store, log, ahora = () => ne
   }
 
   return {
-    crear: (d: CrearAmbulanciaDto) => crearUna(d, 'habilitada'),
+    crear: (_adminUid: string, d: CrearAmbulanciaDto) => crearUna(d, 'habilitada'),
 
     /** Equivale a "Crear Flota" de la app: en secuencia; un error en una fila no detiene las demás. */
-    async crearLote(d: LoteDto): Promise<{ resultados: ResultadoFila[] }> {
+    async crearLote(_adminUid: string, d: LoteDto): Promise<{ resultados: ResultadoFila[] }> {
       const resultados: ResultadoFila[] = [];
       for (const [fila, f] of d.filas.entries()) {
         const v = filaLoteDto.safeParse(f);
@@ -101,13 +95,13 @@ export function crearServicioAmbulancias({ cuentas, store, log, ahora = () => ne
       return { resultados };
     },
 
-    async editar(id: string, campos: EditarAmbulanciaDto): Promise<void> {
+    async editar(_adminUid: string, id: string, campos: EditarAmbulanciaDto): Promise<void> {
       await requerir(id);
       await store.actualizar(id, campos);
     },
 
     /** Auth primero (seguridad), Firestore después. Ambas operaciones son idempotentes: reintentar corrige. */
-    async deshabilitar(id: string): Promise<void> {
+    async deshabilitar(_adminUid: string, id: string): Promise<void> {
       const a = await requerir(id);
       if (a.enTurno || a.currentAlertaId !== null) {
         throw new AppError(409, 'CONFLICT', 'No se puede deshabilitar: la ambulancia está en turno o atendiendo una alerta.');
@@ -116,7 +110,7 @@ export function crearServicioAmbulancias({ cuentas, store, log, ahora = () => ne
       await store.cambiarEstado(id, 'inactiva');
     },
 
-    async habilitar(id: string): Promise<void> {
+    async habilitar(_adminUid: string, id: string): Promise<void> {
       const a = await requerir(id);
       // Evita pisar el estado de una unidad que ya trabaja (la pondría en 'habilitada' en pleno servicio).
       if (a.enTurno || a.currentAlertaId !== null) {
@@ -126,13 +120,13 @@ export function crearServicioAmbulancias({ cuentas, store, log, ahora = () => ne
       await store.cambiarEstado(id, 'habilitada');
     },
 
-    async resetearPassword(id: string, password: string): Promise<void> {
+    async resetearPassword(_adminUid: string, id: string, password: string): Promise<void> {
       await requerir(id);
       await cuentas.actualizarUsuario(id, { password });
       await cuentas.revocarTokens(id);
     },
 
-    async cerrarTurno(id: string): Promise<void> {
+    async cerrarTurno(_adminUid: string, id: string): Promise<void> {
       await store.cerrarTurno(id); // 404 / 409 dentro de la transacción
     },
   };
