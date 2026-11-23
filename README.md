@@ -39,6 +39,11 @@ src/
   config/   env.ts  firebase.ts      (único que importa firebase-admin)
   plugins/  auth.ts  errors.ts
   domain/   tipos.ts  fecha.ts  mappers.ts  puertos.ts
-  modules/  health/  ambulances/{routes,service,store,dto}
+  modules/  health/  ambulances/{routes,facade,service,audit-decorator,store,dto}
   test/     fake-firebase.ts
 ```
+
+Las rutas consumen la fachada del módulo; no acceden a Auth, stores ni auditoría. La auditoría
+envuelve al servicio con un decorador y no cambia el resultado de una acción ya completada si falla
+su escritura. Cuando se incorporen KPI y reportes, sus cálculos deben encapsularse con estrategias
+intercambiables propias de esos módulos.
