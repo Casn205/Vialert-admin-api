@@ -1,5 +1,6 @@
 /** Firebase falso en memoria para las pruebas: ningún test necesita Firebase real. */
-import type { EntradaAuditoria, FirebasePorts } from '../domain/puertos.js';
+import type { AlertaKpi } from '../domain/alerta.js';
+import type { EntradaAuditoria, FirebasePorts, TipoRanking } from '../domain/puertos.js';
 import type { Doc } from '../domain/tipos.js';
 import { AppError } from '../plugins/errors.js';
 
@@ -22,6 +23,13 @@ export function crearFirebaseFalso() {
   const ubicaciones = new Set<string>();
   const auditoria: EntradaAuditoria[] = [];
   /** Permite simular que el batch (`ambulancias` + `roles`) falla. */
+  const alertas: AlertaKpi[] = [];
+  const etiquetas: Record<TipoRanking, Map<string, string>> = {
+    ambulancia: new Map(),
+    conductor: new Map(),
+    paramedico: new Map(),
+    hospital: new Map(),
+  };
   const fallos = { crearDocumentos: false, auditoria: false };
   const tokens: Record<string, string> = { 'tok-admin': 'admin-1', 'tok-usuario': 'user-1' };
   let siguiente = 0;
@@ -102,9 +110,17 @@ export function crearFirebaseFalso() {
         auditoria.push(e);
       },
     },
+    kpis: {
+      async cargarAlertas(desde, hasta) {
+        return alertas.filter((a) => a.createdAtServer !== null && a.createdAtServer >= desde && a.createdAtServer <= hasta);
+      },
+      async cargarEtiquetas(por) {
+        return etiquetas[por];
+      },
+    },
   };
 
-  return { firebase, usuarios, ambulancias, roles, conductores, paramedicos, ubicaciones, auditoria, fallos };
+  return { firebase, usuarios, ambulancias, roles, conductores, paramedicos, ubicaciones, auditoria, fallos, alertas, etiquetas };
 }
 
 export type FirebaseFalso = ReturnType<typeof crearFirebaseFalso>;

@@ -4,13 +4,13 @@
  */
 import { applicationDefault, cert, getApps, initializeApp, type ServiceAccount } from 'firebase-admin/app';
 import { getAuth, type Auth } from 'firebase-admin/auth';
-import { FieldValue, getFirestore, type Firestore } from 'firebase-admin/firestore';
+import { FieldValue, getFirestore, type Firestore, type QueryDocumentSnapshot } from 'firebase-admin/firestore';
 import type { CuentasPort, RolReader, TokenVerifier } from '../domain/puertos.js';
 import { AppError } from '../plugins/errors.js';
 import type { Env } from './env.js';
 
 export { FieldValue };
-export type { Firestore };
+export type { Firestore, QueryDocumentSnapshot };
 
 export function iniciarFirebase(env: Env): { auth: Auth; db: Firestore } {
   const app =

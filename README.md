@@ -27,7 +27,8 @@ La web apunta a esta API con `VITE_API_BASE_URL=http://localhost:3000`.
 ## Rutas (`/api/v1`, todas exigen admin salvo `/health`)
 
 `POST /ambulancias` · `POST /ambulancias/lote` · `PATCH /ambulancias/:id` ·
-`POST /ambulancias/:id/{deshabilitar,habilitar,password,cerrar-turno}`
+`POST /ambulancias/:id/{deshabilitar,habilitar,password,cerrar-turno}` ·
+`GET /kpis/{resumen,series,ranking}` · `GET /reportes/alertas.csv`
 
 Contratos completos en la sección 6.1 de `PLAN_MAESTRO.md`.
 
@@ -35,15 +36,16 @@ Contratos completos en la sección 6.1 de `PLAN_MAESTRO.md`.
 
 ```
 src/
-  app.ts  server.ts          buildApp({ firebase }) / listen
+  app.ts  server.ts          buildApp({ firebase, kpi }) / listen
   config/   env.ts  firebase.ts      (único que importa firebase-admin)
   plugins/  auth.ts  errors.ts
-  domain/   tipos.ts  fecha.ts  mappers.ts  puertos.ts
+  domain/   tipos.ts  fecha.ts  mappers.ts  puertos.ts  alerta.ts
   modules/  health/  ambulances/{routes,facade,service,audit-decorator,store,dto}
-  test/     fake-firebase.ts
+            kpis/{routes,service,calculators,stats,dto,load-alertas}  reports/{routes,service,alertas-csv}
+  test/     fake-firebase.ts  vector-kpi.ts
 ```
 
 Las rutas consumen la fachada del módulo; no acceden a Auth, stores ni auditoría. La auditoría
 envuelve al servicio con un decorador y no cambia el resultado de una acción ya completada si falla
-su escritura. Cuando se incorporen KPI y reportes, sus cálculos deben encapsularse con estrategias
-intercambiables propias de esos módulos.
+su escritura. Los KPI y el CSV siguen el mismo esquema (rutas → servicio): las fórmulas son funciones
+puras en `kpis/calculators.ts` y el ranking elige su criterio con una estrategia por tipo (`claveDe`).

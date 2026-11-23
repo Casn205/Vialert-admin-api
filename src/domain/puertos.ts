@@ -3,6 +3,7 @@
  * viven en `config/firebase.ts` (Auth, roles) y `modules/ambulances/ambulances.store.ts`
  * (Firestore). Las pruebas inyectan implementaciones en memoria (`test/fake-firebase.ts`).
  */
+import type { AlertaKpi } from './alerta.js';
 import type { Doc } from './tipos.js';
 
 export interface TokenVerifier {
@@ -59,9 +60,20 @@ export interface AmbulanciasStore {
   auditar(e: EntradaAuditoria): Promise<void>;
 }
 
+export type TipoRanking = 'ambulancia' | 'conductor' | 'paramedico' | 'hospital';
+
+/** Lecturas de Firestore para los KPI (implementación real: `modules/kpis/load-alertas.ts`). */
+export interface KpisStore {
+  /** Todas las alertas con `createdAtServer` en el rango (carga paginada), más antiguas primero. */
+  cargarAlertas(desde: Date, hasta: Date): Promise<AlertaKpi[]>;
+  /** id → etiqueta legible de la entidad que se rankea. */
+  cargarEtiquetas(por: TipoRanking): Promise<Map<string, string>>;
+}
+
 export interface FirebasePorts {
   tokens: TokenVerifier;
   roles: RolReader;
   cuentas: CuentasPort;
   ambulancias: AmbulanciasStore;
+  kpis: KpisStore;
 }
