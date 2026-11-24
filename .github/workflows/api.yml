@@ -1,0 +1,104 @@
+# Copiar a ambulancias-api/.github/workflows/api.yml
+name: api
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  id-token: write
+  contents: read
+
+env:
+  AWS_REGION: us-east-2
+  # Si cambiaste "project" en Terraform, ajusta estos nombres
+  ECR_REPOSITORY: ambulancias-api
+  ECS_CLUSTER: ambulancias-cluster
+  ECS_SERVICE: ambulancias-api
+  TASK_FAMILY: ambulancias-api
+  CONTAINER_NAME: api
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run typecheck
+      - run: npm run lint
+      - run: npm test
+
+  deploy:
+    needs: check
+    if: github.ref == 'refs/heads/main' && github.event_name != 'pull_request'
+    runs-on: ubuntu-latest
+    concurrency: deploy-api
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: aws-actions/configure-aws-credentials@v4
+        with:
+          role-to-assume: ${{ vars.AWS_ROLE_ARN }}
+          aws-region: ${{ env.AWS_REGION }}
+
+      - id: ecr
+        uses: aws-actions/amazon-ecr-login@v2
+
+      - name: Construir y subir la imagen
+        run: |
+          TAG="${GITHUB_SHA::7}"
+          IMAGE="${{ steps.ecr.outputs.registry }}/${ECR_REPOSITORY}:${TAG}"
+          echo "TAG=${TAG}" >> "$GITHUB_ENV"
+          echo "IMAGE=${IMAGE}" >> "$GITHUB_ENV"
+          docker build --platform linux/amd64 -t "$IMAGE" .
+          docker push "$IMAGE"
+
+      - name: ¿Existe ya el servicio ECS?
+        id: svc
+        run: |
+          STATUS=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            --query 'services[0].status' --output text 2>/dev/null || echo NONE)
+          echo "status=${STATUS}" >> "$GITHUB_OUTPUT"
+
+      - name: Primera vez (el servicio aún no existe)
+        if: steps.svc.outputs.status != 'ACTIVE'
+        run: |
+          echo "::notice::Imagen subida con el tag ${TAG}. Pon image_tag = \"${TAG}\" en terraform.tfvars y ejecuta terraform apply."
+
+      - name: Registrar nueva task definition y actualizar el servicio
+        if: steps.svc.outputs.status == 'ACTIVE'
+        run: |
+          # Parte de la última revisión de la familia (incluye cambios hechos desde Terraform)
+          aws ecs describe-task-definition --task-definition "$TASK_FAMILY" --query taskDefinition > td.json
+
+          jq --arg IMG "$IMAGE" --arg NAME "$CONTAINER_NAME" '
+            .containerDefinitions |= map(if .name == $NAME then .image = $IMG else . end)
+            | del(.taskDefinitionArn, .revision, .status, .requiresAttributes,
+                  .compatibilities, .registeredAt, .registeredBy)
+          ' td.json > new-td.json
+
+          NEW_ARN=$(aws ecs register-task-definition --cli-input-json file://new-td.json \
+            --query taskDefinition.taskDefinitionArn --output text)
+          echo "NEW_ARN=${NEW_ARN}" >> "$GITHUB_ENV"
+
+          aws ecs update-service --cluster "$ECS_CLUSTER" --service "$ECS_SERVICE" \
+            --task-definition "$NEW_ARN" > /dev/null
+
+      - name: Esperar a que el servicio se estabilice
+        if: steps.svc.outputs.status == 'ACTIVE'
+        run: |
+          aws ecs wait services-stable --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE"
+
+          # Si la tarea nueva no arrancó, ECS vuelve a la anterior y "wait" termina igual: lo comprobamos
+          ACTUAL=$(aws ecs describe-services --cluster "$ECS_CLUSTER" --services "$ECS_SERVICE" \
+            --query 'services[0].taskDefinition' --output text)
+          if [ "$ACTUAL" != "$NEW_ARN" ]; then
+            echo "::error::El despliegue fue revertido por ECS. Revisa los logs en CloudWatch (/ecs/ambulancias-api)."
+            exit 1
+          fi
